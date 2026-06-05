@@ -49,13 +49,14 @@ SQF_BEST_PRACTICE = 8.5
 
 # ──────────────────────────────────────────────────────────────────────
 # Item #5 — Asset premiums (€k, added flat to Final Value)
-# The frontend `assets` field is a checkbox list → flat premium per kind.
+# Keys MUST match the frontend's asset checkbox values from Step 1
+# (see Step1Profile.jsx — they emit 'assIP', 'assBrand', etc.)
 # ──────────────────────────────────────────────────────────────────────
 ASSET_PREMIUMS_K = {
-    'patents':       80,    # +€80k flat if user declares patents
-    'trademarks':    25,    # +€25k flat
-    'software':     150,    # +€150k for proprietary software
-    'contracts':    100,    # +€100k for multi-year contracts (default)
+    'assIP':          80,    # Patents          → +€80k
+    'assBrand':       25,    # Trademarks       → +€25k
+    'assSoftware':   150,    # Software         → +€150k
+    'assContracts':  100,    # Multi-year contracts → +€100k
 }
 
 # ──────────────────────────────────────────────────────────────────────

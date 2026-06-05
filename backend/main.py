@@ -1,223 +1,185 @@
 """
-VALUE INTELLIGENCE PLATFORM
-main.py — FastAPI Backend
+Value Intelligence Platform — FastAPI backend.
 
-Avvio:
-  pip install fastapi uvicorn
-  uvicorn main:app --reload
+Single endpoint: POST /api/valutazione
+Receives the full questionnaire payload from the frontend, persists to Supabase,
+calls the 4 Delta RPCs, computes SQF / valuation / value gap / recommendations,
+returns the complete result for Step4 Dashboard.
 
-Endpoint:
-  POST /api/valutazione  →  esegue pipeline L1 + L2 + L3 + recommender
-  GET  /health           →  verifica che il server giri
+Run locally:
+    cd backend
+    pip install -r requirements.txt
+    cp .env.example .env       # fill in Supabase creds
+    uvicorn main:app --reload --port 8000
 """
+import os
+from typing import List, Optional
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
 
-# ── Import dei 3 livelli + recommender ────────
-from normalizer  import normalize_all_inputs
-from scorer      import run_scoring_model
-from valuation   import calculate_value, calculate_value_gap
-from recommender import generate_recommendations
+import db
+from scoring import score_all_capitals, compute_sqf
+from valuation import compute_valuation, compute_value_gap
+from recommendations import get_all_recommendations
+from dashboard import build_dashboard_response
+
+load_dotenv()
 
 
-# ─────────────────────────────────────────────
-# APP
-# ─────────────────────────────────────────────
-
+# ──────────────────────────────────────────────────────────────────────
+# App
+# ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Value Intelligence Platform",
-    description="API per la valutazione strategica delle PMI",
-    version="1.0.0"
+    title="Value Intelligence Platform API",
+    description="Peer-benchmarked SME valuation engine (4-capital model, Delta algorithm)",
+    version="1.0.0",
 )
 
-# CORS — permette al frontend React (localhost:3000 o 5173)
-# di chiamare il backend senza errori di cross-origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=os.getenv('CORS_ORIGINS', '*').split(','),
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 
-# ─────────────────────────────────────────────
-# SCHEMA INPUT — quello che arriva dal frontend
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────
+# Request payload — mirrors the frontend's 3-step form (camelCase)
+# ──────────────────────────────────────────────────────────────────────
+class ValutazionePayload(BaseModel):
+    # Step 1 — Profile
+    companyName: str
+    sector:      str            # 'secTech' | 'secB2B' | ...
+    lifecycle:   str            # 'lcStartup' | 'lcGrowth' | ...
+    objective:   Optional[str]  = None
+    horizon:     Optional[str]  = None
+    assets:      List[str]      = Field(default_factory=list)
 
-class ValutazioneInput(BaseModel):
-    language: Optional[str] = "it"
-    # Step 1 — Profilo
-    company_name: str
-    sector:       str
-    lifecycle:    Optional[str] = None
-    objective:    Optional[str] = None
-    horizon:      Optional[str] = None
-    assets:       Optional[List[str]] = []
-
-    # Step 2 — Bilancio
-    revenue_y1:             float
-    revenue_y2:             float
-    revenue_y3:             float
+    # Step 2 — Financials (€k unless % stated)
+    revenueY1:              float
+    revenueY2:              float
+    revenueY3:              float
     ebitda:                 float
-    net_financial_position: float
-    tech_investment_pct:    float
+    netFinancialPosition:   float
+    techInvestment:         float = Field(ge=0, le=100)
 
-    # Step 3 — Questionario quantitativo
-    recurring_revenue_pct:    float
-    client_concentration_pct: float
+    # Step 3 — Financial sliders
+    recurringRevenue:    float = Field(ge=0, le=100)
+    clientConcentration: float = Field(ge=0, le=100)
 
-    # Step 3 — Human Capital (1-5)
-    key_man_risk:           int
-    span_of_control:        int
-    skill_investment:       int
-    talent_retention:       int
-    sop_standardization:    int
+    # Step 3 — Human Capital
+    keyManRisk:         int = Field(ge=1, le=5)
+    spanOfControl:      int = Field(ge=1, le=5)
+    skillInvestment:    int = Field(ge=1, le=5)
+    talentRetention:    int = Field(ge=1, le=5)
+    sopStandardization: int = Field(ge=1, le=5)
 
-    # Step 3 — Technological Capital (1-5)
-    operational_digitalization: int
-    data_storage:               int
-    workflow_automation:        int
-    proprietary_dataset:        int
-    crm_adoption:               int
+    # Step 3 — Technological Capital
+    operationalDigitalization: int = Field(ge=1, le=5)
+    dataStorage:               int = Field(ge=1, le=5)
+    workflowAutomation:        int = Field(ge=1, le=5)
+    proprietaryDataset:        int = Field(ge=1, le=5)
+    crmAdoption:               int = Field(ge=1, le=5)
 
-    # Step 3 — Relational Capital (1-5)
-    network_quality:         int
-    partnership_structure:   int
-    brand_assets:            int
-    ecosystem_referrals:     int
-    repeat_customers:        int
-
-
-# ─────────────────────────────────────────────
-# ENDPOINT PRINCIPALE
-# ─────────────────────────────────────────────
-
-@app.post("/api/valutazione")
-def valutazione(input_data: ValutazioneInput):
-    """
-    Pipeline completa:
-      1. Normalizza gli input (L1)
-      2. Calcola score per capitale e SQF (L2)
-      3. Calcola valore in € e Value Gap (L3)
-      4. Genera Top 3 raccomandazioni (recommender)
-      5. Restituisce output completo per il dashboard
-    """
-
-    try:
-        # ── LIVELLO 1 — Normalizzazione ───────
-        raw = {
-            "revenue_y1":                  input_data.revenue_y1,
-            "revenue_y2":                  input_data.revenue_y2,
-            "revenue_y3":                  input_data.revenue_y3,
-            "ebitda":                      input_data.ebitda,
-            "net_financial_position":      input_data.net_financial_position,
-            "tech_investment_pct":         input_data.tech_investment_pct,
-            "recurring_revenue_pct":       input_data.recurring_revenue_pct,
-            "client_concentration_pct":    input_data.client_concentration_pct,
-            # Human Capital
-            "key_man_risk":                input_data.key_man_risk,
-            "span_of_control":             input_data.span_of_control,
-            "skill_investment":            input_data.skill_investment,
-            "talent_retention":            input_data.talent_retention,
-            "sop_standardization":         input_data.sop_standardization,
-            # Technological Capital
-            "operational_digitalization":  input_data.operational_digitalization,
-            "data_storage":                input_data.data_storage,
-            "workflow_automation":         input_data.workflow_automation,
-            "proprietary_dataset":         input_data.proprietary_dataset,
-            "crm_adoption":                input_data.crm_adoption,
-            # Relational Capital
-            "network_quality":             input_data.network_quality,
-            "partnership_structure":       input_data.partnership_structure,
-            "brand_assets":                input_data.brand_assets,
-            "ecosystem_referrals":         input_data.ecosystem_referrals,
-            "repeat_customers":            input_data.repeat_customers,
-        }
-
-        normalized = normalize_all_inputs(raw, input_data.sector)
-
-        # Estrai i valori derivati calcolati dal L1
-        # — servono al recommender per l'impatto dinamico
-        ebitda_margin_pct = normalized["_ebitda_margin_pct"]
-        cagr_pct          = normalized["_cagr_pct"]
-
-        # ── LIVELLO 2 — Scoring ───────────────
-        scoring = run_scoring_model(normalized, input_data.sector)
-
-        sqf = scoring["sqf"]
-        gf  = scoring["gf"]
-
-        # ── LIVELLO 3 — Valutazione ───────────
-        valuation = calculate_value(
-            input_data.ebitda,
-            input_data.sector,
-            sqf,
-            gf
-        )
-
-        value_gap = calculate_value_gap(
-            input_data.ebitda,
-            input_data.sector,
-            sqf,
-            gf
-        )
-
-        # ── RECOMMENDER — Top 3 azioni ────────
-        # Passa ebitda_margin_pct e cagr_pct calcolati dal L1
-        top3 = generate_recommendations(
-            scores            = scoring["scores"],
-            raw_inputs        = raw,
-            ebitda_margin_pct = ebitda_margin_pct,   # ← calcolato dal L1
-            cagr_pct          = cagr_pct,             # ← calcolato dal L1
-            objective         = input_data.objective,
-            lang              = input_data.language,
-            sector            = input_data.sector
-        )
-
-        # ── OUTPUT ────────────────────────────
-        return {
-            # Valutazione
-            "estimated_value":  valuation["value"],
-            "value_min":        valuation["value_min"],
-            "value_max":        valuation["value_max"],
-            "multiple_used":    valuation["multiple_used"],
-
-            # Value Gap
-            "value_gap_pct":    value_gap["gap_pct"],
-            "optimized_value":  value_gap["optimized_value"],
-            "gap_absolute":     value_gap["gap_absolute"],
-
-            # Score e indici (dal L2)
-            "scores":            scoring["scores"],
-            "sqf":               sqf,
-            "gf":                gf,
-            "quality_score":     scoring["quality_score"],
-            "risk_index":        scoring["risk_index"],
-            "scalability_index": scoring["scalability_index"],
-            "benchmarks":        scoring["benchmarks"],
-            "gaps_vs_benchmark": scoring["gaps_vs_benchmark"],
-
-            # Dati calcolati utili per il frontend
-            "ebitda_margin_pct": ebitda_margin_pct,
-            "cagr_pct":          cagr_pct,
-            "debt_ebitda_ratio": normalized["_debt_ebitda_ratio"],
-
-            # Top 3 raccomandazioni
-            "top3_actions": top3,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Step 3 — Relational Capital
+    networkQuality:       int = Field(ge=1, le=5)
+    partnershipStructure: int = Field(ge=1, le=5)
+    brandAssets:          int = Field(ge=1, le=5)
+    ecosystemReferrals:   int = Field(ge=1, le=5)
+    repeatCustomers:      int = Field(ge=1, le=5)
 
 
-# ─────────────────────────────────────────────
-# HEALTH CHECK
-# ─────────────────────────────────────────────
-
-@app.get("/health")
+# ──────────────────────────────────────────────────────────────────────
+# Endpoints
+# ──────────────────────────────────────────────────────────────────────
+@app.get('/health')
 def health():
-    return {"status": "ok", "message": "Value Intelligence Platform API running"}
+    return {'status': 'ok'}
+
+
+@app.post('/api/valutazione')
+def valutazione(payload: ValutazionePayload):
+    """
+    Full evaluation pipeline:
+      1. Persist company profile + 4 capital responses to Supabase
+      2. Call 4 Delta SQL RPCs to score every question on 1-10
+      3. Aggregate to 4 capital scores, then weighted SQF
+      4. Compute valuation, value gap, recommendations
+      5. Return everything the Step4 Dashboard needs
+    """
+    try:
+        sb = db.get_supabase()
+        body = payload.model_dump()
+
+        # 1. Resolve lookup IDs from frontend keys
+        sector_id    = db.resolve_sector_id(payload.sector)
+        lifecycle_id = db.resolve_lifecycle_id(payload.lifecycle)
+
+        # 2. Insert company profile + 4 capital responses
+        company_id = db.insert_company(sb, body, sector_id, lifecycle_id)
+        ids = {
+            'human':      db.insert_hc(sb, company_id, sector_id, lifecycle_id, body),
+            'tech':       db.insert_tc(sb, company_id, sector_id, lifecycle_id, body),
+            'relational': db.insert_rc(sb, company_id, sector_id, lifecycle_id, body),
+            'financial':  db.insert_fc(sb, company_id, sector_id, lifecycle_id, body),
+        }
+
+        # 3. Score all 4 capitals via SQL RPCs (Delta algorithm)
+        scoring = score_all_capitals(sb, ids)
+
+        # 4. SQF (weighted average using sector weights)
+        sqf_result = compute_sqf(scoring['capitals'], payload.sector)
+
+        # 5. Valuation + Value Gap
+        val = compute_valuation(
+            payload.ebitda, payload.sector, sqf_result['sqf'], payload.assets
+        )
+        gap = compute_value_gap(
+            payload.ebitda, payload.sector, sqf_result['sqf'], payload.assets
+        )
+
+        # 6. Recommendations (12-item lookup matrix)
+        recs = get_all_recommendations(scoring['capitals'])
+
+        # 7. Adapt to the Step4Dashboard's expected shape so the frontend
+        #    works without any UI code changes.
+        dashboard = build_dashboard_response(
+            capital_scores=scoring['capitals'],
+            sqf=sqf_result['sqf'],
+            sector_key=payload.sector,
+            valuation=val,
+            value_gap=gap,
+            recommendations=recs,
+        )
+
+        # Return the dashboard fields at the top level (so the frontend can read
+        # them directly) AND keep the clean internal shape under `_internal` for
+        # debugging / future use.
+        return {
+            **dashboard,
+            '_internal': {
+                'company_id':       company_id,
+                'sector':           payload.sector,
+                'lifecycle':        payload.lifecycle,
+                'capital_scores':   scoring['capitals'],
+                'capital_details':  scoring['details'],
+                'sqf':              sqf_result['sqf'],
+                'sqf_norm':         sqf_result['sqf_norm'],
+                'sector_weights':   sqf_result['weights'],
+                'valuation':        val,
+                'value_gap':        gap,
+                'recommendations':  recs,
+            },
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        # Log full trace in real prod; for now bubble the message up
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")

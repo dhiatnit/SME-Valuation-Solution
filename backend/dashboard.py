@@ -12,7 +12,7 @@ Field mapping (backend → frontend):
     value_gap                    →  value_gap_pct, gap_absolute
     recommendations              →  top3_actions[{title,desc,impact,horizon,sqf_delta,capital}]
 """
-from config import SECTOR_MULTIPLES
+from config import SECTOR_MULTIPLES, OBJECTIVE_PRIORITY, DEFAULT_PRIORITY
 
 
 # Frontend uses 'technological' (not 'tech') in dashboard score keys
@@ -46,6 +46,7 @@ def build_dashboard_response(
     valuation: dict,         # output of compute_valuation()
     value_gap: dict,         # output of compute_value_gap()
     recommendations: list,   # output of get_all_recommendations()
+    objective: str = None,   # Idea A — frontend Step1 objective ('objExit', etc.)
 ) -> dict:
     """Returns the full Step4Dashboard-ready payload."""
 
@@ -70,9 +71,16 @@ def build_dashboard_response(
     elif sqf >= 4.5: risk_label = 'MEDIUM'
     else:            risk_label = 'HIGH'
 
-    # ── 4. Top 3 actions: pick the 3 LOWEST-scoring capitals so the dashboard
-    #     surfaces what most needs improvement first. ──
-    sorted_recs = sorted(recommendations, key=lambda r: r['score'])
+    # ── 4. Top 3 actions: Idea A — pick the 3 MOST RELEVANT capitals for the
+    #     user's stated objective. Within each objective's priority order, we
+    #     skip the lowest-priority capital (rank 4) so the dashboard always
+    #     surfaces what matters for the user's goal. ──
+    priority = OBJECTIVE_PRIORITY.get(objective, DEFAULT_PRIORITY)
+    # Sort recommendations by (priority asc, then score asc) — top 3 = highest priority
+    sorted_recs = sorted(
+        recommendations,
+        key=lambda r: (priority.get(r['capital'], 99), r['score'])
+    )
     top3 = []
     for rec in sorted_recs[:3]:
         # Impact estimate: improving a weak capital to 8.5 gives a meaningful uplift.

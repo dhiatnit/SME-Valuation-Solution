@@ -60,6 +60,28 @@ ASSET_PREMIUMS_K = {
 }
 
 # ──────────────────────────────────────────────────────────────────────
+# Idea A — Objective-driven recommendation priority
+# Each objective ranks the 4 capitals 1 (most important) → 4 (least).
+# The dashboard's top3_actions skips the LEAST important capital for the
+# user's stated objective, so advice always aligns with what they want.
+# ──────────────────────────────────────────────────────────────────────
+OBJECTIVE_PRIORITY = {
+    # Selling the company → boost valuation drivers first
+    'objExit':       {'financial': 1, 'tech': 2, 'human': 3, 'relational': 4},
+    # Seeking investors → financial KPIs + tech story matter most
+    'objInvestors':  {'financial': 1, 'tech': 2, 'relational': 3, 'human': 4},
+    # Generational handover → people & process continuity first
+    'objHandover':   {'human': 1, 'tech': 2, 'relational': 3, 'financial': 4},
+    # Organic growth → channels & tech enablers first
+    'objOrganic':    {'relational': 1, 'tech': 2, 'human': 3, 'financial': 4},
+    # Stability → financial health + retention first
+    'objStability':  {'financial': 1, 'human': 2, 'tech': 3, 'relational': 4},
+}
+# Used as default when objective is None / unknown / not provided
+DEFAULT_PRIORITY = {'financial': 1, 'human': 2, 'tech': 3, 'relational': 4}
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Frontend ↔ DB field name mappings
 # ──────────────────────────────────────────────────────────────────────
 HC_FIELD_MAP = {

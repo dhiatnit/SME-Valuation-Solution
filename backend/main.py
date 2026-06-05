@@ -154,6 +154,7 @@ def valutazione(payload: ValutazionePayload):
             valuation=val,
             value_gap=gap,
             recommendations=recs,
+            objective=payload.objective,   # Idea A — reorder recs per user goal
         )
 
         # Return the dashboard fields at the top level (so the frontend can read

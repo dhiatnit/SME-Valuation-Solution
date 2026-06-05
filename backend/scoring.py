@@ -12,6 +12,18 @@ from config import SECTOR_WEIGHTS
 CAPITALS = ('human', 'tech', 'relational', 'financial')
 
 
+def get_financial_sub_score(financial_details: list, question_key: str) -> float:
+    """
+    Pull one specific KPI's Delta score (1-10) from the financial details list.
+    Used to compute the Growth Factor (which needs CAGR + Recurring scores).
+    Returns 5.5 (neutral) if not found.
+    """
+    for row in financial_details or []:
+        if row.get('question') == question_key:
+            return float(row['delta_score'])
+    return 5.5
+
+
 def average_delta(delta_rows: list) -> float:
     """Mean of the 5 delta_score values returned by a Delta RPC."""
     if not delta_rows:

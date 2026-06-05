@@ -33,16 +33,22 @@ SECTOR_WEIGHTS = {
 }
 
 # ──────────────────────────────────────────────────────────────────────
-# Item #1 — Valuation formula constants
-# Final Value = EBITDA × Multiple × (VAL_BASE + VAL_RANGE × SQF_norm)
-# SQF=0 → 0.7× multiplier   SQF=0.5 → 1.0×   SQF=1.0 → 1.3×
+# Item #1 — Valuation formula (per prof's spec, PDF page 6):
+#     V = EBITDA × Sector_Multiple × SQF × GF   (+ Asset Premiums — our extension)
+#
+# SQF lands in [0.6, 1.4] via linear remap of our 1-10 internal SQF.
+# GF  lands in [0.7, 1.3] via remap of CAGR Delta + Recurring Delta averages.
 # ──────────────────────────────────────────────────────────────────────
-VAL_BASE  = 0.7
-VAL_RANGE = 0.6
+SQF_PROF_MIN = 0.6     # internal SQF=1   → prof SQF = 0.6
+SQF_PROF_MAX = 1.4     # internal SQF=10  → prof SQF = 1.4
+GF_MIN       = 0.7     # weak growth      → GF = 0.7
+GF_MAX       = 1.3     # strong growth    → GF = 1.3
+
+# Value range shown to user (±10% per prof's dashboard example)
+VALUE_RANGE_PCT = 0.10
 
 # ──────────────────────────────────────────────────────────────────────
-# Item #4 — Value Gap "best practice" target
-# Used to compute the optimised valuation a company could reach.
+# Item #4 — Value Gap "best practice" target (internal 1-10 SQF scale)
 # 8.5/10 = top-quintile target (statistically realistic vs. unreachable 10)
 # ──────────────────────────────────────────────────────────────────────
 SQF_BEST_PRACTICE = 8.5

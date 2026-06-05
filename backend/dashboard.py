@@ -12,7 +12,7 @@ Field mapping (backend → frontend):
     value_gap                    →  value_gap_pct, gap_absolute
     recommendations              →  top3_actions[{title,desc,impact,horizon,sqf_delta,capital}]
 """
-from config import SECTOR_MULTIPLES, OBJECTIVE_PRIORITY, DEFAULT_PRIORITY
+from config import SECTOR_MULTIPLES, OBJECTIVE_PRIORITY, DEFAULT_PRIORITY, VALUE_RANGE_PCT
 
 
 # Frontend uses 'technological' (not 'tech') in dashboard score keys
@@ -61,9 +61,9 @@ def build_dashboard_response(
 
     # ── 2. Valuation in € (frontend divides by 1M for display) ──
     estimated_value_eur = valuation['final_value_k'] * 1000
-    # ±15% range — typical valuation uncertainty band for SME M&A
-    value_min = round(estimated_value_eur * 0.85)
-    value_max = round(estimated_value_eur * 1.15)
+    # ±10% range per prof's dashboard example (PDF page 9)
+    value_min = round(estimated_value_eur * (1 - VALUE_RANGE_PCT))
+    value_max = round(estimated_value_eur * (1 + VALUE_RANGE_PCT))
 
     # ── 3. Quality score (0-100) and risk band from SQF ──
     quality_score = _scale_to_100(sqf)

@@ -21,8 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import db
-from scoring import score_all_capitals, compute_sqf
-from valuation import compute_valuation, compute_value_gap
+from scoring import score_all_capitals, compute_sqf, get_financial_sub_score
+from valuation import compute_valuation, compute_value_gap, compute_gf
 from recommendations import get_all_recommendations
 from dashboard import build_dashboard_response
 
@@ -134,12 +134,17 @@ def valutazione(payload: ValutazionePayload):
         # 4. SQF (weighted average using sector weights)
         sqf_result = compute_sqf(scoring['capitals'], payload.sector)
 
-        # 5. Valuation + Value Gap
+        # 5. Growth Factor (prof's formula needs GF separately from SQF)
+        cagr_delta      = get_financial_sub_score(scoring['details']['financial'], 'fq1_cagr')
+        recurring_delta = get_financial_sub_score(scoring['details']['financial'], 'fq4_recurring_revenue')
+        gf              = compute_gf(cagr_delta, recurring_delta)
+
+        # 6. Valuation + Value Gap (prof's formula: V = EBITDA × Mult × SQF × GF)
         val = compute_valuation(
-            payload.ebitda, payload.sector, sqf_result['sqf'], payload.assets
+            payload.ebitda, payload.sector, sqf_result['sqf'], gf, payload.assets
         )
         gap = compute_value_gap(
-            payload.ebitda, payload.sector, sqf_result['sqf'], payload.assets
+            payload.ebitda, payload.sector, sqf_result['sqf'], gf, payload.assets
         )
 
         # 6. Recommendations (12-item lookup matrix)

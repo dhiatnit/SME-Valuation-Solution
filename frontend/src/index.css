@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #FDFDFD;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-subtle: #F4F4F5;
+
+  --color-accent-primary: #09090B; /* Deep zinc-950 */
+  --color-accent-second: #71717A;
+  --color-accent-warn: #F59E0B;
+  --color-accent-danger: #EF4444;
+
+  --color-text-primary: #09090B;
+  --color-text-secondary: #52525B;
+  --color-text-muted: #A1A1AA;
+
+  --color-border-subtle: #E4E4E7;
+  --color-border-active: #A1A1AA;
+
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Custom Bento Box Shadows */
+  --shadow-bento: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 4px 12px 0 rgba(0, 0, 0, 0.02);
+  --shadow-glow-primary: 0 0 0 2px rgba(9, 9, 11, 0.1);
+}
+
+:root {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+@layer utilities {
+  .text-label {
+    font-family: var(--font-body);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+  }
+}
+
+/* Base resets */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.input-glow:focus, .input-glow:focus-within {
+  border-color: var(--color-accent-primary);
+  box-shadow: var(--shadow-glow-primary);
+  outline: none;
+}
+
+/* Bento Card Style Base */
+.bento-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 1.5rem; /* rounded-3xl equivalent */
+  box-shadow: var(--shadow-bento);
+  overflow: hidden;
+}
+
+/* Recharts reset */
+.recharts-cartesian-grid-horizontal line, 
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--color-border-subtle);
+  stroke-dasharray: 4 4;
+}

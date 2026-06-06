@@ -23,8 +23,27 @@ _CAPITAL_KEY_MAP = {
     'financial':  'financial',
 }
 
-# Cluster mean = 5.5 by Delta design. Convert to 0-100 scale for benchmark display.
-_PEER_BENCHMARK_0_100 = 55.0
+
+def _benchmark_from_cluster_means(delta_rows: list) -> int:
+    """
+    Sector-specific peer benchmark on 0-100 scale.
+
+    Each Delta row carries the cluster_mean (1-5 scale) for that question
+    in the user's sector+lifecycle peer group. We average the 5 (or 6 for
+    financial) cluster means and rescale to 0-100. This makes the dashboard
+    benchmark line genuinely sector-specific — Tech Mature shows ~75 for
+    technology, Retail Mature shows ~40, etc.
+    """
+    if not delta_rows:
+        return 55  # neutral fallback
+    means = []
+    for r in delta_rows:
+        cm = float(r.get('cluster_mean', 3.0))
+        # Bucketed values are already 1-5 for both qualitative and financial
+        means.append(cm)
+    avg = sum(means) / len(means)
+    pct = (avg - 1) / 4 * 100   # 1-5 → 0-100
+    return max(0, min(100, round(pct)))
 
 # Action-card horizon hints by score band
 _HORIZON_BY_BAND = {
@@ -47,6 +66,7 @@ def build_dashboard_response(
     value_gap: dict,         # output of compute_value_gap()
     recommendations: list,   # output of get_all_recommendations()
     objective: str = None,   # Idea A — frontend Step1 objective ('objExit', etc.)
+    capital_details: dict = None,  # {'human': [delta rows], 'tech': [...], ...}
 ) -> dict:
     """Returns the full Step4Dashboard-ready payload."""
 
@@ -56,8 +76,18 @@ def build_dashboard_response(
         for cap, score in capital_scores.items()
     }
 
-    benchmarks = {k: int(_PEER_BENCHMARK_0_100) for k in scores_100}
-    gaps_vs_benchmark = {k: scores_100[k] - int(_PEER_BENCHMARK_0_100) for k in scores_100}
+    # Sector-specific benchmarks — derived from real cluster_means in the DB.
+    # Each capital gets its OWN benchmark (Tech Tech-capital might be 78,
+    # Retail Tech-capital might be 38). This is the "peer benchmark" the
+    # dashboard radar/bars compare against.
+    if capital_details:
+        benchmarks = {
+            _CAPITAL_KEY_MAP[cap]: _benchmark_from_cluster_means(capital_details.get(cap, []))
+            for cap in capital_details
+        }
+    else:
+        benchmarks = {k: 55 for k in scores_100}  # fallback if details missing
+    gaps_vs_benchmark = {k: scores_100[k] - benchmarks.get(k, 55) for k in scores_100}
 
     # ── 2. Valuation in € (frontend divides by 1M for display) ──
     estimated_value_eur = valuation['final_value_k'] * 1000

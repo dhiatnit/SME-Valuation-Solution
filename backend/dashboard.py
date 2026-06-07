@@ -54,8 +54,16 @@ _HORIZON_BY_BAND = {
 
 
 def _scale_to_100(score_1_10: float) -> int:
-    """Convert a 1-10 Delta score to a 0-100 dashboard number (rounded)."""
+    """Convert a 1-10 Delta score to a 0-100 dashboard number (rounded).
+    Used for quality_score which the dashboard displays as 'X/100' directly."""
     return round((score_1_10 / 10.0) * 100)
+
+
+def _scale_to_unit(score_1_10: float) -> float:
+    """Convert a 1-10 Delta score to a 0-1 fraction.
+    Used for scores/benchmarks/gaps that frontend components (ScoreBar,
+    RadarChart) multiply by 100 themselves for display."""
+    return round(score_1_10 / 10.0, 4)
 
 
 def build_dashboard_response(
@@ -70,24 +78,31 @@ def build_dashboard_response(
 ) -> dict:
     """Returns the full Step4Dashboard-ready payload."""
 
-    # ── 1. Scores section (0-100) ──
-    scores_100 = {
-        _CAPITAL_KEY_MAP[cap]: _scale_to_100(score)
+    # ── 1. Scores as 0-1 fractions (NOT 0-100).
+    # The React components (ScoreBar, RadarChart) multiply by 100 themselves
+    # for display. Sending 0-100 here would result in "7100/100" bugs.
+    scores_unit = {
+        _CAPITAL_KEY_MAP[cap]: _scale_to_unit(score)
         for cap, score in capital_scores.items()
     }
 
-    # Sector-specific benchmarks — derived from real cluster_means in the DB.
-    # Each capital gets its OWN benchmark (Tech Tech-capital might be 78,
-    # Retail Tech-capital might be 38). This is the "peer benchmark" the
-    # dashboard radar/bars compare against.
+    # Sector-specific benchmarks (also as 0-1 fractions).
     if capital_details:
         benchmarks = {
-            _CAPITAL_KEY_MAP[cap]: _benchmark_from_cluster_means(capital_details.get(cap, []))
+            _CAPITAL_KEY_MAP[cap]: round(
+                _benchmark_from_cluster_means(capital_details.get(cap, [])) / 100, 4
+            )
             for cap in capital_details
         }
     else:
-        benchmarks = {k: 55 for k in scores_100}  # fallback if details missing
-    gaps_vs_benchmark = {k: scores_100[k] - benchmarks.get(k, 55) for k in scores_100}
+        benchmarks = {k: 0.55 for k in scores_unit}  # fallback
+    gaps_vs_benchmark = {
+        k: round(scores_unit[k] - benchmarks.get(k, 0.55), 4)
+        for k in scores_unit
+    }
+    # Keep an integer 0-100 alias under a different name for any consumer
+    # that wants the rounded display number.
+    scores_100 = {k: round(v * 100) for k, v in scores_unit.items()}
 
     # ── 2. Valuation in € (frontend divides by 1M for display) ──
     estimated_value_eur = valuation['final_value_k'] * 1000
@@ -134,9 +149,9 @@ def build_dashboard_response(
         'multiple_used':      SECTOR_MULTIPLES[sector_key],
         'value_gap_pct':      value_gap['value_gap_pct'],
         'gap_absolute':       value_gap['value_gap_k'] * 1000,
-        'scores':             scores_100,
-        'benchmarks':         benchmarks,
-        'gaps_vs_benchmark':  gaps_vs_benchmark,
+        'scores':             scores_unit,         # 0-1 fractions (frontend ×100 itself)
+        'benchmarks':         benchmarks,          # 0-1 fractions (same)
+        'gaps_vs_benchmark':  gaps_vs_benchmark,   # 0-1 difference (same)
         'quality_score':      quality_score,
         'risk_index':         {'label': risk_label},
         'top3_actions':       top3,

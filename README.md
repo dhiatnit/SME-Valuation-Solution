@@ -1,59 +1,102 @@
-Perché le soglie e non una formula lineare
-Potresti chiederti: perché non semplicemente valore / valore_massimo? Ad esempio 16% / 40% = 0.4.
-La risposta è che il valore aziendale non cresce linearmente con i margini. La differenza tra un EBITDA margin del 5% e del 10% è enorme in termini di salute aziendale. La differenza tra 25% e 30% è molto meno significativa. Le soglie catturano questa non-linearità reale, ed è per questo che si ispirano al modello Altman Z-Score che usa esattamente lo stesso approccio.
+# SME Valuation Solution
 
+An interactive web platform for strategic valuation of Italian small and medium enterprises (SMEs). Answers the question: *"What is my business worth, what drives that value, and how can I grow it?"*
 
+---
 
+## Why thresholds instead of linear formulas
 
+You might ask: why not simply `value / max_value`? For example, `16% / 40% = 0.4`.
 
+The answer is that business value does **not** grow linearly with margins. The difference between a 5% and 10% EBITDA margin is enormous in terms of business health. The difference between 25% and 30% is far less significant. Thresholds capture this real non-linearity — which is why we follow the **Altman Z-Score model**, which uses exactly the same approach.
 
+---
 
-Perché alcune variabili sono inverse
-Client Concentration e Founder Dependency sono inverse perché misurano un rischio, non una qualità. Più sono alte, peggio è per l'azienda:
-Concentration 55% → normalizzato 0.3  (rischio alto)
-Concentration 15% → normalizzato 1.0  (rischio basso)
-Se non le invertissi, un'azienda con il 90% del fatturato su un solo cliente riceverebbe uno score alto — il contrario di quello che il modello deve comunicare.
+## Why some variables are inverse
 
+**Client Concentration** and **Founder Dependency** are inverse measures because they measure *risk*, not quality. Higher values are worse for the business:
 
+- Concentration 55% → normalized score 0.3 (high risk)
+- Concentration 15% → normalized score 1.0 (low risk)
 
+Without inverting, a company with 90% of revenue from a single client would receive a high score — the opposite of what the model should communicate.
 
+---
 
+## Where the weights come from
 
+The honest answer: there are no "scientifically certified" weights for this specific model. No one has them. Even professional business valuation models use weights derived from a mix of literature, empirical experience, and defensible methodological choices.
 
-Da dove vengono i pesi
-La risposta onesta è: non esistono pesi "scientificamente certificati" per questo modello specifico. Nessuno li ha. Anche i modelli professionali di valutazione aziendale usano pesi che derivano da una combinazione di letteratura, esperienza empirica e scelte metodologiche difendibili.
-Quello che conta non è avere i pesi "giusti" — è saperli giustificare con una logica coerente.
+**What matters is not having the "right" weights — it's being able to justify them with coherent logic.**
 
-La logica dietro ogni peso
-Capitale Finanziario — pesi interni (30/25/25/20)
-VariabilePesoPerchéEBITDA Margin30%È il dato più diretto di redditività operativa — la base di qualsiasi valutazione aziendaleRevenue CAGR25%La traiettoria di crescita impatta direttamente il multiplo che un acquirente è disposto a pagareRecurring Revenue25%Ricavi ricorrenti = prevedibilità = riduzione del rischio per l'acquirente. Vale quanto il CAGRClient Concentration20%È un rischio, non una qualità — pesa meno degli altri tre ma è un segnale critico
-Perché questi quattro e non altri
-Seguono la logica del modello Altman Z-Score — selezioni poche variabili ad alta segnaletica invece di molte variabili ridondanti. Il professore lo ha detto esplicitamente: "il modello più intelligente non è quello con più variabili, è quello che seleziona le più rilevanti."
+### Logic behind each weight
 
-Capitale Tecnologico — pesi interni (40/35/25)
-VariabilePesoPerchéDigital Maturity40%È la condizione abilitante — senza digitalizzazione non c'è né automazione né scalabilitàTech Investment35%È il segnale concreto e misurabile dell'impegno tecnologico dell'aziendaScalability25%Dipende in parte dalla maturità digitale — peso minore per evitare doppio conteggio
+#### Financial Capital (internal weights: 30/25/25/20)
 
-Capitale Umano — pesi interni (40/35/25)
-VariabilePesoPerchéFounder Dependency40%È il fattore singolo più penalizzante in una due diligence — un acquirente vuole un'azienda che funziona senza il fondatoreManagement Structure35%Team manageriale = capacità di esecuzione autonomaClient Portfolio Quality25%Qui entra come proxy della qualità delle relazioni commerciali gestite dal team
-La logica dei pesi 40/35 qui si ispira alla letteratura sulla trasferibilità aziendale — il tema centrale nelle valutazioni pre-exit.
+| Variable | Weight | Why |
+|----------|--------|-----|
+| EBITDA Margin | 30% | The most direct measure of operating profitability — the foundation of any valuation |
+| Revenue CAGR | 25% | Growth trajectory directly impacts the multiple a buyer is willing to pay |
+| Recurring Revenue | 25% | Recurring revenue = predictability = reduced risk for the buyer. Equals CAGR in importance |
+| Client Concentration | 20% | It's a risk, not a strength — lower weight than the others but a critical signal |
 
-Capitale Relazionale — pesi interni (60/40)
-VariabilePesoPerchéNetwork Strength60%È l'unica variabile che misura direttamente la rete — deve dominareClient Concentration40%Usata come proxy: dipendere da pochi clienti significa anche avere una rete relazionale debole
+**Why these four?** We follow Altman Z-Score logic: select a few high-signal variables instead of many redundant ones. As your professor said: *"The smartest model is not the one with the most variables, but the one that selects the most relevant ones."*
 
-Come lo spieghi in presentazione
-La risposta più efficace alla giuria è questa:
+#### Technological Capital (internal weights: 40/35/25)
 
-"I pesi non sono arbitrari — seguono tre principi gerarchici. Primo: le variabili oggettive e verificabili pesano più di quelle dichiarate. Secondo: i fattori che impattano direttamente la trasferibilità dell'azienda pesano più di quelli contestuali. Terzo: abbiamo evitato il doppio conteggio assegnando peso minore alle variabili già catturate indirettamente da altre."
+| Variable | Weight | Why |
+|----------|--------|-----|
+| Digital Maturity | 40% | The enabling condition — without digitalization there is no automation or scalability |
+| Tech Investment | 35% | The concrete, measurable signal of the company's technological commitment |
+| Scalability | 25% | Partly dependent on digital maturity — lower weight to avoid double-counting |
 
+#### Human Capital (internal weights: 40/35/25)
 
+| Variable | Weight | Why |
+|----------|--------|-----|
+| Founder Dependency | 40% | The single most penalizing factor in due diligence — a buyer wants a business that works without the founder |
+| Management Structure | 35% | Managerial team = autonomous execution capacity |
+| Client Portfolio Quality | 25% | Proxy for the quality of commercial relationships managed by the team |
 
-## Step 3 Questionaire - Logica
-Le tre voci ora modificano il Live Score Preview. Ecco cosa è cambiato:
+**Logic behind the 40/35 split:** inspired by literature on *business transferability* — the central theme in pre-exit valuations.
 
-Tech Focus (verde) — proxy del Capitale Tecnologico, reagisce a Maturità Digitale (peso 40/65) e Scalabilità del Modello (peso 25/65), normalizzati sui pesi disponibili (senza tech_investment che non è un input del form)
-Relational Focus (viola) — proxy del Capitale Relazionale, reagisce a Forza della Rete (60%) e alla concentrazione clienti (40%), specchiando esattamente la formula backend
+#### Relational Capital (internal weights: 60/40)
 
+| Variable | Weight | Why |
+|----------|--------|-----|
+| Network Strength | 60% | The only variable that directly measures the network — it must dominate |
+| Client Concentration | 40% | Used as a proxy: depending on few clients also means weak relational networks |
 
-## Banca Dati
-"Le soglie di normalizzazione sono calibrate empiricamente su un campione di 4.184 PMI italiane ATECO 62 estratto da AIDA — Bureau van Dijk, aprile 2026. La mediana del ROS per il settore è 5.79%, significativamente inferiore alle assunzioni generiche della letteratura — questo dimostra perché un modello calibrato sul contesto italiano è necessario."
+---
 
+## How to explain this in a presentation
+
+The most effective answer to a jury:
+
+> "The weights are not arbitrary — they follow three hierarchical principles. First: objective and verifiable variables outweigh declared ones. Second: factors that directly impact business transferability outweigh contextual factors. Third: we avoided double-counting by assigning lower weights to variables already indirectly captured by others."
+
+---
+
+## Step 3: Questionnaire Logic
+
+The three categories now modify the Live Score Preview. Here's what changed:
+
+- **Tech Focus (green)** — proxy for Technological Capital; responds to Digital Maturity (weight 40/65) and Model Scalability (weight 25/65), normalized to available weights (excluding tech_investment, which is not a form input)
+- **Relational Focus (purple)** — proxy for Relational Capital; responds to Network Strength (60%) and Client Concentration (40%), mirroring the backend formula exactly
+
+---
+
+## Database
+
+> The normalization thresholds are empirically calibrated on a sample of **4,184 Italian SMEs** (ATECO 62 sector) extracted from AIDA — Bureau van Dijk, April 2026. The median ROS (Return on Sales) for the sector is 5.79%, significantly lower than generic literature assumptions — this demonstrates why a model calibrated to the Italian context is necessary.
+
+---
+
+## Tech stack
+
+- **Backend:** Python, FastAPI
+- **Frontend:** React 18, Vite, Tailwind CSS, Framer Motion
+- **Data:** AIDA / Bureau van Dijk (Italian SME benchmarks)
+- **Database:** Supabase (PostgreSQL)
+
+See `CLAUDE.md` for detailed architecture and setup.
